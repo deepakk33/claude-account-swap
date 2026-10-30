@@ -10,6 +10,9 @@
 # If you'd rather not deal with fpath, just add to ~/.zshrc:
 #   source /full/path/to/cswap-completion.zsh
 
+# Sourced from a bare ~/.zshrc that never ran compinit, compdef does not exist yet.
+(( $+functions[compdef] )) || { autoload -Uz compinit && compinit -i; }
+
 _cswap() {
   local reg="${XDG_CONFIG_HOME:-$HOME/.config}/cswap-min/slots"
   local -a cmds slots

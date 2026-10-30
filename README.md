@@ -13,17 +13,20 @@ cswap list             # see your slots
 
 ## Install
 
-Copy-paste the whole block. zsh (macOS default) shown; for bash swap `~/.zshrc` → `~/.bashrc` and `exec zsh` → `exec bash`.
+Copy-paste the whole block. It works the same in bash and zsh — it writes to whichever
+one you actually use, and does not need a shell restart.
 
 ```bash
 mkdir -p ~/.local/bin
 curl -fsSL https://raw.githubusercontent.com/deepakk33/claude-account-swap/main/cswap-min.sh -o ~/.local/bin/cswap
 chmod +x ~/.local/bin/cswap
-grep -qs '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-exec zsh
+
+RC=~/.bashrc; [ -n "${ZSH_VERSION:-}" ] && RC=~/.zshrc
+grep -qs '.local/bin' "$RC" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-Verify:
+Verify — in the same terminal, no reopening needed:
 
 ```bash
 cswap --help
@@ -35,29 +38,36 @@ cswap --help
 ```bash
 git clone https://github.com/deepakk33/claude-account-swap.git
 cd claude-account-swap
-less cswap-min.sh          # it is ~230 lines, all of it readable
+less cswap-min.sh          # ~300 lines, all of it readable
 mkdir -p ~/.local/bin && cp cswap-min.sh ~/.local/bin/cswap && chmod +x ~/.local/bin/cswap
 ```
 </details>
 
-**Requirements:** Claude Code installed and logged into at least one account, plus `python3`
-(`python3 --version`; macOS without it: `xcode-select --install`).
+### Requirements
+
+- Claude Code, logged into at least one account
+- `bash` (the script runs under bash even if your login shell is zsh, fish or something else)
+- `python3` — check with `python3 --version`
+
+Missing `python3`? It is absent from many minimal Linux images:
+
+```bash
+sudo apt install -y python3        # Debian / Ubuntu
+sudo dnf install -y python3        # Fedora / RHEL
+sudo pacman -S python              # Arch
+xcode-select --install             # macOS
+```
 
 ### TAB-completion (optional)
 
-```bash
-# zsh
-curl -fsSL https://raw.githubusercontent.com/deepakk33/claude-account-swap/main/cswap-completion.zsh -o ~/.cswap-completion.zsh
-echo 'source ~/.cswap-completion.zsh' >> ~/.zshrc
-echo "zstyle ':completion:*' menu select" >> ~/.zshrc
-exec zsh
-```
+Same deal — one block, picks the right file for your shell:
 
 ```bash
-# bash
-curl -fsSL https://raw.githubusercontent.com/deepakk33/claude-account-swap/main/cswap-completion.bash -o ~/.cswap-completion.bash
-echo 'source ~/.cswap-completion.bash' >> ~/.bashrc
-exec bash
+RC=~/.bashrc; F=cswap-completion.bash
+[ -n "${ZSH_VERSION:-}" ] && { RC=~/.zshrc; F=cswap-completion.zsh; }
+curl -fsSL "https://raw.githubusercontent.com/deepakk33/claude-account-swap/main/$F" -o ~/."$F"
+grep -qs "$F" "$RC" || echo "source ~/.$F" >> "$RC"
+source ~/."$F"
 ```
 
 Then `cswap switch <TAB>` lists your saved slots and cycles through them.
@@ -65,12 +75,12 @@ Then `cswap switch <TAB>` lists your saved slots and cycles through them.
 ### Uninstall
 
 ```bash
-rm -f ~/.local/bin/cswap ~/.cswap-completion.zsh ~/.cswap-completion.bash
+rm -f ~/.local/bin/cswap ~/.cswap-completion.bash ~/.cswap-completion.zsh
 rm -rf ~/.config/cswap-min      # also deletes your saved account backups
 ```
 
-Then drop the `source`/`PATH` lines from your `~/.zshrc` or `~/.bashrc`. On macOS the Keychain
-backups are removed with `cswap forget <name>` *before* you delete the script.
+Then drop the `source` and `PATH` lines from your `~/.bashrc` or `~/.zshrc`. On macOS, remove
+the Keychain backups with `cswap forget <name>` *before* deleting the script.
 
 ---
 
