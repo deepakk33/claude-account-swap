@@ -1,66 +1,142 @@
-# cswap — minimal Claude Code account switcher
+# cswap
 
-Switch between multiple Claude Code accounts **mid-session** — no `/logout`, no restart.
-macOS and Linux. One bash script, no package, no dependencies beyond `python3`.
+Switch between multiple Claude Code accounts **mid-session**. No `/logout`, no restart.
 
 ```bash
-cswap save work        # back up whoever is logged in right now
-cswap switch personal  # billing/quota flips instantly
-cswap list             # see your slots
+cswap save work         # back up whoever is logged in now
+cswap switch personal   # billing + quota flip instantly
+cswap switch _prev      # undo
 ```
+
+One bash script. Nothing to install, no packages, no account, nothing leaves your machine.
 
 ---
 
-## Install
+# 1. Install
 
-Copy-paste the whole block. It works the same in bash and zsh — it writes to whichever
-one you actually use, and does not need a shell restart.
+## macOS
 
 ```bash
+# python3 — skip if `python3 --version` already prints something
+xcode-select --install
+
+# install
 mkdir -p ~/.local/bin
 curl -fsSL https://raw.githubusercontent.com/deepakk33/claude-account-swap/main/cswap-min.sh -o ~/.local/bin/cswap
 chmod +x ~/.local/bin/cswap
-
 RC=~/.bashrc; [ -n "${ZSH_VERSION:-}" ] && RC=~/.zshrc
 grep -qs '.local/bin' "$RC" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC"
 export PATH="$HOME/.local/bin:$PATH"
-```
 
-Verify — in the same terminal, no reopening needed:
-
-```bash
+# check — same terminal, no reopening
 cswap --help
 ```
 
+Your tokens stay in the **login Keychain**. First `save` pops a Keychain prompt → click **Always Allow**.
+
+## Linux
+
+```bash
+# python3 — missing from most minimal images
+sudo apt install -y python3        # Debian/Ubuntu  (dnf: python3 · pacman: python)
+
+# install
+mkdir -p ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/deepakk33/claude-account-swap/main/cswap-min.sh -o ~/.local/bin/cswap
+chmod +x ~/.local/bin/cswap
+RC=~/.bashrc; [ -n "${ZSH_VERSION:-}" ] && RC=~/.zshrc
+grep -qs '.local/bin' "$RC" || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC"
+export PATH="$HOME/.local/bin:$PATH"
+
+# check — same terminal, no reopening
+cswap --help
+```
+
+Works in bash or zsh — the block detects which you use. zsh not required.
+
 <details>
-<summary>Prefer to read the script before running it? (recommended)</summary>
+<summary><b>Rather read the script first? (recommended — it handles your credentials)</b></summary>
 
 ```bash
 git clone https://github.com/deepakk33/claude-account-swap.git
 cd claude-account-swap
-less cswap-min.sh          # ~300 lines, all of it readable
+less cswap-min.sh        # ~300 lines, plain bash
 mkdir -p ~/.local/bin && cp cswap-min.sh ~/.local/bin/cswap && chmod +x ~/.local/bin/cswap
 ```
 </details>
 
-### Requirements
+---
 
-- Claude Code, logged into at least one account
-- `bash` (the script runs under bash even if your login shell is zsh, fish or something else)
-- `python3` — check with `python3 --version`
+# 2. Use
 
-Missing `python3`? It is absent from many minimal Linux images:
+### Step 1 — save each account, once
+
+**Do not `/logout` between them.** Logout revokes the token and the backup becomes dead weight.
 
 ```bash
-sudo apt install -y python3        # Debian / Ubuntu
-sudo dnf install -y python3        # Fedora / RHEL
-sudo pacman -S python              # Arch
-xcode-select --install             # macOS
+# logged into account A right now:
+cswap save work
+
+# run /login inside Claude Code, pick account B:
+cswap save personal
 ```
 
-### TAB-completion (optional)
+### Step 2 — switch whenever
 
-Same deal — one block, picks the right file for your shell:
+```bash
+cswap switch personal
+```
+
+```console
+$ cswap list
+  work             token:✓ identity:✓
+  personal         token:✓ identity:✓ (active)
+
+$ cswap current
+personal@example.com
+```
+
+Billing and quota flip **immediately**. The email shown inside an *already-open* session is cached at startup — reopen the `claude` session or VS Code tab if it looks stale. (Linux updates right away.)
+
+### All commands
+
+| Command | Does |
+|---|---|
+| `cswap save <name>` | Back up the account logged in right now |
+| `cswap switch <name>` | Switch to it |
+| `cswap switch _prev` | Undo the last switch |
+| `cswap list` | Show saved accounts |
+| `cswap current` | Show the active account email |
+| `cswap rename <old> <new>` | Rename a label (credentials untouched) |
+| `cswap forget <name>` | Delete a backup (active login untouched) |
+
+---
+
+# 3. Read this before you rely on it
+
+- **Don't switch to the account that's already active.** cswap refuses — restoring an old token over a fresh one usually logs you out. `--force` overrides, only if you're sure the backup is current.
+- **Switch failed or logged you out?** `/login` that account again, then `cswap save <name>`. Undo a bad switch with `cswap switch _prev`.
+- Normal A↔B switching stays healthy on its own: every switch re-saves the *departing* account from its live token first.
+
+### Where your tokens live
+
+| | Active token | Backups |
+|---|---|---|
+| **macOS** | login Keychain | login Keychain |
+| **Linux** | `~/.claude/.credentials.json` | `~/.config/cswap-min/`, mode `0600` |
+
+Both are the files and formats Claude Code already uses. On Linux that means plaintext on disk — same as Claude Code itself, so this adds no new exposure.
+
+### Tested
+
+Linux path is covered on Debian 12 / bash 5.2: full save/switch/list/rename/forget lifecycle, lock contention, stale-lock recovery, `CLAUDE_CONFIG_DIR`, file permissions.
+
+The macOS Keychain path has **no automated test** — testing it means writing to a real login Keychain. Read it before trusting it with an account you care about.
+
+---
+
+<details>
+<summary><b>TAB-completion (optional)</b></summary>
 
 ```bash
 RC=~/.bashrc; F=cswap-completion.bash
@@ -70,99 +146,25 @@ grep -qs "$F" "$RC" || echo "source ~/.$F" >> "$RC"
 source ~/."$F"
 ```
 
-Then `cswap switch <TAB>` lists your saved slots and cycles through them.
+`cswap switch <TAB>` then lists and cycles your saved accounts.
+</details>
 
-### Uninstall
+<details>
+<summary><b>Uninstall</b></summary>
 
 ```bash
+cswap forget <name>             # macOS: do this FIRST, it clears the Keychain entries
 rm -f ~/.local/bin/cswap ~/.cswap-completion.bash ~/.cswap-completion.zsh
-rm -rf ~/.config/cswap-min      # also deletes your saved account backups
+rm -rf ~/.config/cswap-min      # deletes your saved backups too
 ```
 
-Then drop the `source` and `PATH` lines from your `~/.bashrc` or `~/.zshrc`. On macOS, remove
-the Keychain backups with `cswap forget <name>` *before* deleting the script.
+Then delete the `source` and `PATH` lines from `~/.bashrc` or `~/.zshrc`.
+</details>
 
----
+<details>
+<summary><b>What this is</b></summary>
 
-## Set up your accounts
+A no-install, ~300-line cousin of [claude-swap](https://github.com/realiti4/claude-swap). It swaps the credential Claude Code reads and the identity it displays (`oauthAccount` in `.claude.json`), cooperating with Claude Code's own refresh locks.
 
-Once per account. **Do not `/logout` between them** — that revokes the refresh token and the
-backup becomes useless.
-
-```bash
-# logged into account A in Claude Code:
-cswap save work
-
-# now run /login in Claude Code, pick account B:
-cswap save personal
-```
-
-macOS first run shows a Keychain prompt → click **Always Allow**.
-
-```console
-$ cswap list
-  work             token:✓ identity:✓ (active)
-  personal         token:✓ identity:✓
-```
-
-## Switch
-
-```bash
-cswap switch personal
-cswap current          # shows the active account email
-cswap switch _prev     # undo the last switch
-```
-
-- **Billing/quota flips instantly.**
-- The email shown in an *already-running* session is cached at startup — reopen the `claude`
-  session or VS Code tab if it still shows the old one. Linux updates immediately.
-
-## Commands
-
-| Command | Does |
-|---|---|
-| `cswap save <name>` | Back up the currently logged-in account (token + identity) |
-| `cswap switch <name>` | Activate `<name>` |
-| `cswap switch _prev` | Undo the last switch |
-| `cswap list` | List saved slots |
-| `cswap current` | Show the active account email |
-| `cswap rename <old> <new>` | Rename a slot label (credentials unchanged) |
-| `cswap forget <name>` | Drop a slot's backups (active login untouched) |
-
-## Gotchas
-
-- **Don't switch to the account that's already active.** The tool refuses it — restoring an older
-  token snapshot over a fresh one usually logs you out. Override with `--force` only if you know
-  the backup is current.
-- **Stale backup → re-save.** If a switch fails or logs you out, `/login` that account again and
-  `cswap save <name>`. Recover from a bad switch with `cswap switch _prev`.
-- Normal A↔B switching keeps itself healthy: every switch re-saves the *departing* account's
-  backup from its live token first.
-
-## Where your tokens live
-
-Nothing leaves your machine.
-
-| | Active token | Backups |
-|---|---|---|
-| **macOS** | login Keychain (Claude Code's own item) | login Keychain |
-| **Linux** | `~/.claude/.credentials.json` (Claude Code's own file) | `~/.config/cswap-min/`, mode `0600` |
-
-Same place and format Claude Code already uses. On Linux that means plaintext on disk — which is
-how Claude Code stores it too, so this adds no new exposure.
-
-## What this is
-
-A no-install, ~300-line cousin of [claude-swap](https://github.com/realiti4/claude-swap). It swaps
-the credential Claude Code reads and the identity it displays (`oauthAccount` in `.claude.json`),
-cooperating with Claude Code's own refresh locks.
-
-Want usage dashboards, auto-switching before you hit rate limits, or background token-refresh
-persistence? Use the full `claude-swap` tool instead.
-
-## Status
-
-Linux path tested on Debian 12 / bash 5.2: full `save`/`switch`/`list`/`rename`/`forget`
-lifecycle, lock contention and stale-lock recovery, `CLAUDE_CONFIG_DIR`, and file permissions.
-The macOS Keychain path is not covered by an automated test — testing it means writing to a
-real login Keychain. Review it before trusting it with an account you care about.
+Want usage dashboards, auto-switching before you hit rate limits, or background token-refresh persistence? Use the full `claude-swap` instead.
+</details>
